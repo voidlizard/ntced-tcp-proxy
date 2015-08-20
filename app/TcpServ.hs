@@ -10,7 +10,7 @@ import Control.Monad
 import Data.Conduit
 import Data.Conduit.Network
 import Data.Maybe
-import Data.Text
+import Data.Text (Text)
 import Network.Socket
 import Network (withSocketsDo)
 import Options.Applicative
@@ -31,6 +31,8 @@ import qualified Data.Streaming.Network as Net
 
 import Network.NTCE.Types
 import qualified Network.NTCE.FlowRecord.Pretty as FR
+
+import Network.SockAddr
 
 data Settings = Settings { sPort    :: Int
                          , sPortUDP :: Int
@@ -63,19 +65,17 @@ main = execParser opts >>= \opts -> do
         dgram <- await
 
         justDo dgram (return ()) $ \s -> do
-          let rs = MP.unpack (UDP.msgData s)
-          error "oops"
+          let mfrs = MP.unpack (BSL.fromStrict (UDP.msgData s)) :: Maybe [FlowRecord]
+          justDo mfrs (return ()) $ \frs -> do
 
-        error "JOPA!"
---         s <- fmap BSL.fromStrict <$> await
---         let msg = maybe [] (fromMaybe [] . MP.unpack) s :: [FlowRecord]
+            let sa = UDP.msgSender s
 
---         liftIO $ atomically $ do
---           cls  <- readTVar queues
---           cls' <- forM (M.toList cls) $ \(k,q) -> do
---                     mapM_ (R.write q) msg
---                     return (k,q)
---           writeTVar queues (M.fromList cls')
+            liftIO $ atomically $ do
+              cls  <- readTVar queues
+              cls' <- forM (M.toList cls) $ \(k,q) -> do
+                        mapM_ (R.write q) $ zip (repeat sa) frs
+                        return (k,q)
+              writeTVar queues (M.fromList cls')
 
         return ()
 
@@ -98,7 +98,8 @@ main = execParser opts >>= \opts -> do
 
             forever $ do
               (r, _) <- atomically $ R.read rq
-              ((yield (FR.renderBS (snd r)) >> yield "\n") $$ appSink app)
+              let sa = showSockAddrBS (fst r)
+              (yield sa >> yield "|" >> yield (FR.renderBS (snd r)) >> yield "\n") $$ appSink app
 
 
       _ <- waitCatch run

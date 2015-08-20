@@ -67,6 +67,8 @@ executable ntced-sink-tcp
                      , stm
                      , rolling-queue
                      , wl-pprint-text
+                     , network
+                     , sockaddr
                      , ntcedtcp
 
   default-language:    Haskell2010

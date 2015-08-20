@@ -5,6 +5,7 @@ packages:
 
 extra-deps:
     - rolling-queue-0.1
+    - sockaddr-0.0.0
 #     - QuickCheck-2.8.1
 
 resolver: lts-2.21
