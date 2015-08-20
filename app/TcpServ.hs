@@ -5,23 +5,32 @@ import Conduit
 import Control.Applicative
 import Control.Concurrent.Async (concurrently)
 import Control.Concurrent hiding (yield)
+import Control.Exception (finally)
 import Control.Monad
 import Data.Conduit
-import qualified Data.Conduit.List as CL
 import Data.Conduit.Network
 import Data.Maybe
-import Data.MessagePack as M
 import Data.Text
-import Network (withSocketsDo)
 import Network.Socket
+import Network (withSocketsDo)
 import Options.Applicative
-import qualified Data.ByteString.Lazy as BSL
-import qualified Data.ByteString as BS
-import qualified Data.Conduit.Network.UDP as UDP
-import qualified Data.Streaming.Network as Net
 import System.IO (stdin)
 
+import Control.Concurrent.STM
+import Control.Concurrent.STM.TVar
+import qualified Data.STM.RollingQueue as R
+
+import qualified Data.Map as M
+import qualified Data.MessagePack as MP
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.Conduit.List as CL
+import qualified Data.Conduit.Network.UDP as UDP
+import qualified Data.Streaming.Network as Net
+
 import Network.NTCE.Types
+import qualified Network.NTCE.FlowRecord.Pretty as FR
 
 data Settings = Settings { sPort    :: Int
                          , sPortUDP :: Int
@@ -43,21 +52,40 @@ settings :: Parser Settings
 settings = Settings <$> tcpPort <*> udpPort
 
 main = execParser opts >>= \opts -> do
+
+  clients <- newTVarIO 1 :: IO (TVar Int)
+  queues  <- newTVarIO (M.empty) :: IO (TVar (M.Map Int (R.RollingQueue FlowRecord)))
+
   withSocketsDo $ do
     sock <- Net.bindPortUDP (sPortUDP opts) "*"
-    forever $ do
+    forkIO $ forever $ do
       sourceSocket sock $$ do
         s <- fmap BSL.fromStrict <$> await
-        let msg = maybe [] (fromMaybe [] . M.unpack) s :: [FlowRecord]
-        liftIO $ print msg
---         let msg = liftM (M.unpack . BSL.fromStrict) s :: Maybe [FlowRecord]
---         maybe (return ()) (\s -> liftIO $ putStrLn (show (BS.length s))) s
+        let msg = maybe [] (fromMaybe [] . MP.unpack) s :: [FlowRecord]
+
+        liftIO $ atomically $ do
+          cls  <- readTVar queues
+          cls' <- forM (M.toList cls) $ \(k,q) -> do
+                    mapM_ (R.write q) msg
+                    return (k,q)
+          writeTVar queues (M.fromList cls')
+
+        return ()
+
+    runTCPServer (serverSettings (sPort opts) "*") $ \app -> do
+
+      rq <- R.newIO 1000 :: IO (R.RollingQueue FlowRecord)
+      clId <- atomically $ do n <- readTVar clients
+                              modifyTVar' clients succ
+                              return n
+
+      atomically $ modifyTVar' queues (M.insert clId rq)
+
+      forever $ do
+        r <- atomically $ R.read rq
+        (yield (FR.renderBS (fst r)) >> yield "\n") $$ appSink app
 
   where
     opts = info (helper <*> settings)
                 (fullDesc  <> progDesc "ntced sink proxy"
                            <> header "ntced-sink-tcp" )
-
---     message addr s = Net.Message (toBS s) (addrAddress addr)
-
---     toBS = BSL.toStrict . M.pack

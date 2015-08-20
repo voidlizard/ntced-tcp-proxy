@@ -3,7 +3,8 @@ packages:
   - '.'
   - contrib/msgpack
 
-extra-deps: []
+extra-deps:
+    - rolling-queue-0.1
 #     - QuickCheck-2.8.1
 
 resolver: lts-2.21

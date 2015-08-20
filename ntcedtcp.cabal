@@ -16,19 +16,21 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Network.NTCE.Types 
+  exposed-modules:     Network.NTCE.Types, Network.NTCE.FlowRecord.Pretty
   build-depends:       base >= 4.7 && < 5
+                     , bytestring
                      , msgpack
                      , text
                      , vector
+                     , wl-pprint-text
   default-language:    Haskell2010
 
 executable ntced-sink-udp 
   hs-source-dirs:      app
   main-is:             UdpSink.hs
-  ghc-options:         -O2 -threaded -rtsopts -with-rtsopts=-N   
+  ghc-options:         -O2 -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
-                     , bytestring                     
+                     , bytestring
                      , conduit
                      , conduit-combinators
                      , conduit-extra
@@ -50,6 +52,7 @@ executable ntced-sink-tcp
   ghc-options:         -O2 -threaded -rtsopts -with-rtsopts=-N   
   build-depends:       base
                      , bytestring                     
+                     , containers
                      , conduit
                      , conduit-combinators
                      , conduit-extra
@@ -61,6 +64,9 @@ executable ntced-sink-tcp
                      , text
                      , vector
                      , optparse-applicative
+                     , stm
+                     , rolling-queue
+                     , wl-pprint-text
                      , ntcedtcp
 
   default-language:    Haskell2010
