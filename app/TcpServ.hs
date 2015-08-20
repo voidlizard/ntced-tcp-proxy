@@ -58,7 +58,7 @@ main = execParser opts >>= \opts -> do
 
   withSocketsDo $ do
     sock <- Net.bindPortUDP (sPortUDP opts) "*"
-    forkIO $ forever $ do
+    async $ forever $ do
       sourceSocket sock $$ do
         s <- fmap BSL.fromStrict <$> await
         let msg = maybe [] (fromMaybe [] . MP.unpack) s :: [FlowRecord]
@@ -72,6 +72,12 @@ main = execParser opts >>= \opts -> do
 
         return ()
 
+    async $ forever $ do
+      threadDelay 5000000
+      size <- M.size <$> atomically (readTVar queues)
+      putStrLn $ "clients: " ++ show size
+      return ()
+
     runTCPServer (serverSettings (sPort opts) "*") $ \app -> do
 
       rq <- R.newIO 1000 :: IO (R.RollingQueue FlowRecord)
@@ -79,7 +85,7 @@ main = execParser opts >>= \opts -> do
                               modifyTVar' clients succ
                               return n
 
-      let run = do
+      run <- async $ do
 
             atomically $ modifyTVar' queues (M.insert clId rq)
 
@@ -89,12 +95,9 @@ main = execParser opts >>= \opts -> do
               ((yield (FR.renderBS (fst r)) >> yield "\n") $$ appSink app)
 
 
-      void $ forkIO (finally run (atomically $ modifyTVar' queues (M.delete clId)))
+      _ <- waitCatch run
 
-      forever $ do
-        threadDelay 5000000
-        size <- M.size <$> atomically (readTVar queues)
-        putStrLn $ "clients: " ++ show size
+      atomically $ modifyTVar' queues (M.delete clId)
 
   where
     opts = info (helper <*> settings)
