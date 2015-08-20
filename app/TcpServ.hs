@@ -3,7 +3,7 @@
 
 import Conduit
 import Control.Applicative
-import Control.Concurrent.Async (concurrently)
+import Control.Concurrent.Async
 import Control.Concurrent hiding (yield)
 import Control.Exception (finally)
 import Control.Monad
@@ -79,11 +79,22 @@ main = execParser opts >>= \opts -> do
                               modifyTVar' clients succ
                               return n
 
-      atomically $ modifyTVar' queues (M.insert clId rq)
+      let run = do
+
+            atomically $ modifyTVar' queues (M.insert clId rq)
+
+            forever $ do
+
+              r <- atomically $ R.read rq
+              ((yield (FR.renderBS (fst r)) >> yield "\n") $$ appSink app)
+
+
+      void $ forkIO (finally run (atomically $ modifyTVar' queues (M.delete clId)))
 
       forever $ do
-        r <- atomically $ R.read rq
-        (yield (FR.renderBS (fst r)) >> yield "\n") $$ appSink app
+        threadDelay 5000000
+        size <- M.size <$> atomically (readTVar queues)
+        putStrLn $ "clients: " ++ show size
 
   where
     opts = info (helper <*> settings)
