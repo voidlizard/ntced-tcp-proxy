@@ -54,21 +54,28 @@ settings = Settings <$> tcpPort <*> udpPort
 main = execParser opts >>= \opts -> do
 
   clients <- newTVarIO 1 :: IO (TVar Int)
-  queues  <- newTVarIO (M.empty) :: IO (TVar (M.Map Int (R.RollingQueue FlowRecord)))
+  queues  <- newTVarIO (M.empty) :: IO (TVar (M.Map Int (R.RollingQueue (SockAddr,FlowRecord))))
 
   withSocketsDo $ do
     sock <- Net.bindPortUDP (sPortUDP opts) "*"
     async $ forever $ do
-      sourceSocket sock $$ do
-        s <- fmap BSL.fromStrict <$> await
-        let msg = maybe [] (fromMaybe [] . MP.unpack) s :: [FlowRecord]
+      UDP.sourceSocket sock 4096 $$ do
+        dgram <- await
 
-        liftIO $ atomically $ do
-          cls  <- readTVar queues
-          cls' <- forM (M.toList cls) $ \(k,q) -> do
-                    mapM_ (R.write q) msg
-                    return (k,q)
-          writeTVar queues (M.fromList cls')
+        justDo dgram (return ()) $ \s -> do
+          let rs = MP.unpack (UDP.msgData s)
+          error "oops"
+
+        error "JOPA!"
+--         s <- fmap BSL.fromStrict <$> await
+--         let msg = maybe [] (fromMaybe [] . MP.unpack) s :: [FlowRecord]
+
+--         liftIO $ atomically $ do
+--           cls  <- readTVar queues
+--           cls' <- forM (M.toList cls) $ \(k,q) -> do
+--                     mapM_ (R.write q) msg
+--                     return (k,q)
+--           writeTVar queues (M.fromList cls')
 
         return ()
 
@@ -80,7 +87,7 @@ main = execParser opts >>= \opts -> do
 
     runTCPServer (serverSettings (sPort opts) "*") $ \app -> do
 
-      rq <- R.newIO 1000 :: IO (R.RollingQueue FlowRecord)
+      rq <- R.newIO 1000 :: IO (R.RollingQueue (SockAddr,FlowRecord))
       clId <- atomically $ do n <- readTVar clients
                               modifyTVar' clients succ
                               return n
@@ -90,9 +97,8 @@ main = execParser opts >>= \opts -> do
             atomically $ modifyTVar' queues (M.insert clId rq)
 
             forever $ do
-
-              r <- atomically $ R.read rq
-              ((yield (FR.renderBS (fst r)) >> yield "\n") $$ appSink app)
+              (r, _) <- atomically $ R.read rq
+              ((yield (FR.renderBS (snd r)) >> yield "\n") $$ appSink app)
 
 
       _ <- waitCatch run
@@ -103,3 +109,6 @@ main = execParser opts >>= \opts -> do
     opts = info (helper <*> settings)
                 (fullDesc  <> progDesc "ntced sink proxy"
                            <> header "ntced-sink-tcp" )
+
+    justDo :: Monad m => Maybe a -> m b -> (a -> m b) -> m b
+    justDo v d f = maybe d f v
