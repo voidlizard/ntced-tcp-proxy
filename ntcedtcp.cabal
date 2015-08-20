@@ -44,3 +44,23 @@ executable ntced-sink-udp
 
   default-language:    Haskell2010
   
+executable ntced-sink-tcp
+  hs-source-dirs:      app
+  main-is:             TcpServ.hs
+  ghc-options:         -O2 -threaded -rtsopts -with-rtsopts=-N   
+  build-depends:       base
+                     , bytestring                     
+                     , conduit
+                     , conduit-combinators
+                     , conduit-extra
+                     , streaming-commons
+                     , async
+                     , word8
+                     , network
+                     , msgpack
+                     , text
+                     , vector
+                     , optparse-applicative
+                     , ntcedtcp
+
+  default-language:    Haskell2010

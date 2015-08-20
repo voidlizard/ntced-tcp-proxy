@@ -40,7 +40,6 @@ settings = Settings <$> strOption (  long "host"
                     <*> udpPort
 
 main = execParser opts >>= \opts -> do
-
   msg <- M.unpack <$> BSL.hGetContents stdin :: IO (Maybe ([HostEntry],[FlowRecord]))
 
   let flows = maybe [] snd msg
@@ -56,4 +55,4 @@ main = execParser opts >>= \opts -> do
 
     message addr s = Net.Message (toBS s) (addrAddress addr)
 
-    toBS = BSL.toStrict . M.pack
+    toBS = BSL.toStrict . M.pack . (:[])
