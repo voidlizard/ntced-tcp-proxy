@@ -1,0 +1,9 @@
+flags: {}
+packages:
+  - '.'
+  - contrib/msgpack
+
+extra-deps: []
+#     - QuickCheck-2.8.1
+
+resolver: lts-2.21
