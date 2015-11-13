@@ -19,6 +19,8 @@ data FlowRecord = FlowRecord { fProto   :: Text
                              , fIpB     :: Text
                              , fPortB   :: Int
                              , fExpired :: Bool
+                             , fPkts    :: Int
+                             , fBytes   :: Int
                              , fCat     :: [Text]
                              } deriving (Show)
 
@@ -43,10 +45,12 @@ instance MessagePack FlowRecord where
                            , toObject $ fIpB e
                            , toObject $ fPortB e
                            , toObject $ fExpired e
+                           , toObject $ fPkts e
+                           , toObject $ fBytes e
                            , toObject $ fCat e
                            ]
 
-  fromObject (ObjectArray [prot, m1, i1, p1, m2, i2, p2, e, cats]) = flow
+  fromObject (ObjectArray [prot, m1, i1, p1, m2, i2, p2, e, p, b, cats]) = flow
     where flow = pure FlowRecord <*> fromObject prot
                                  <*> fromObject m1
                                  <*> fromObject i1
@@ -55,5 +59,7 @@ instance MessagePack FlowRecord where
                                  <*> fromObject i2
                                  <*> fromObject p2
                                  <*> fromObject e
+                                 <*> fromObject p
+                                 <*> fromObject b
                                  <*> fromObject cats
 

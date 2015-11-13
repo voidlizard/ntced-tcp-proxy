@@ -26,6 +26,8 @@ mkDoc r = entry
                                      , int (fPortA r)
                                      , txt (fIpB r)
                                      , int (fPortB r)
+                                     , int (fPkts r)
+                                     , int (fBytes r)
                                      , cat $ punctuate (text ",") (map txt (fCat r))
                                      ]
 
